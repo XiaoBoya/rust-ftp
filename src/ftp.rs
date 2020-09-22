@@ -147,4 +147,9 @@ impl FTP {
         }
         return Ok(r)
     }
+    pub fn cwd(&self, path:String) -> Result<String, Error> {
+        let commond = format!("CWD {}", path);
+        let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
+        return result;
+    }
 }
