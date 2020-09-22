@@ -29,5 +29,11 @@ fn main() {
         // } else {
         //     println!("{}", pwd_result.ok().unwrap())
         // }
+        // let size_result = the_result.as_ref().unwrap().size("./configbak.yaml".to_string());
+        // if size_result.is_err() {
+        //     println!("{}", size_result.err().unwrap().to_string())
+        // } else {
+        //     println!("{}", size_result.ok().unwrap())
+        // }
     }
 }

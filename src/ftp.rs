@@ -3,7 +3,7 @@ use std::net;
 use std::result::Result;
 use std::str;
 use regex::Regex;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 
 pub struct FTP {
     pub conn: net::TcpStream,
@@ -151,5 +151,17 @@ impl FTP {
         let commond = format!("CWD {}", path);
         let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
         return result;
+    }
+    pub fn size(&self, path:String) -> Result<u32, Error> {
+        let commond = format!("SIZE {}", path);
+        let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
+        if result.is_err() {
+            return Err(result.err().unwrap())
+        } else {
+            let mut size_mid_str = result.as_ref().unwrap();
+            let size_str = &size_mid_str[4..size_mid_str.len()-2];
+            let size = size_str.parse::<u32>();
+            return Ok(size.ok().unwrap())
+        }
     }
 }
