@@ -2,6 +2,8 @@ use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::net;
 use std::result::Result;
 use std::str;
+use regex::Regex;
+use std::borrow::Borrow;
 
 pub struct FTP {
     pub conn: net::TcpStream,
@@ -88,7 +90,7 @@ impl FTP {
         if !content.starts_with(&expects) {
             return Err(Error::new(ErrorKind::NotFound, content));
         }
-        return Ok(String::new());
+        return Ok(content);
     }
     pub fn close(&self) {
         &self.conn.shutdown(net::Shutdown::Both);
@@ -128,5 +130,21 @@ impl FTP {
         let rename_to_command = format!("RNTO {}",to);
         let result2 = self.cmd(super::status::STATUS_ACTION_PENDING.to_string(), rename_to_command);
         return result2
+    }
+    pub fn pwd(&self) -> Result<String,Error> {
+        let result = self.cmd(super::status::STATUS_PATH_CREATED.to_string(), "PWD".to_string());
+        if result.borrow().as_ref().is_err() {
+            return Err(result.err().unwrap())
+        }
+        let path_regex = Regex::new("\"(.*)\"").unwrap();
+        let content = result.borrow().as_ref().unwrap();
+        let path = path_regex.captures_iter(&content.as_str()).enumerate();
+        let mut r = String::new();
+        for (_,v) in path {
+            for i in 0..v.len() {
+                r = String::from(&v[i]);
+            }
+        }
+        return Ok(r)
     }
 }
