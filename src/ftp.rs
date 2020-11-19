@@ -3,7 +3,8 @@ use std::net;
 use std::result::Result;
 use std::str;
 use regex::Regex;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
+use super::status;
 
 pub struct FTP {
     pub conn: net::TcpStream,
@@ -163,5 +164,21 @@ impl FTP {
             let size = size_str.parse::<u32>();
             return Ok(size.ok().unwrap())
         }
+    }
+    pub fn dele(&self, path:String) -> Result<String, Error> {
+        let commond = format!("DELE {}", path);
+        let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
+        if result.is_err() {
+            return Err(result.err().unwrap())
+        }
+        let line = self.receive();
+        if line.is_err() {
+            return Err(result.err().unwrap())
+        }
+        let content = line.unwrap();
+        if !content.starts_with("200") {
+            return Err(Error::new(ErrorKind::NotFound, content));
+        }
+        return Ok(content);
     }
 }
