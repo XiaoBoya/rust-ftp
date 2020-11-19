@@ -28,22 +28,89 @@ impl FTP {
     // pub fn read_discard(&mut self) {
     //     self.conn.flush();
     // }
-    fn send(&self, command: String) -> Result<usize, Error> {
-        let mut conn = &self.conn;
-        let mut new_command = command;
-        if !new_command.ends_with("\r\n") {
-            new_command.push_str("\r\n");
+    pub fn close(&self) {
+        &self.conn.shutdown(net::Shutdown::Both);
+    }
+    fn parse_line(&self) {} // no finished
+    pub fn walk(&self) {} // no finished
+    pub fn quit(&self) {} // no finished
+    pub fn noop(&self) {} // no finished
+    pub fn raw_cmd(&self) {} // no finished
+    fn cmd(&self, expects: String, command: String) -> Result<String, Error> {
+        let send_result = self.send(command);
+        if send_result.is_err() {
+            return Err(send_result.err().unwrap());
         }
-        let result = conn.write(new_command.as_bytes());
-        if result.is_err() {
-            return result;
+        let line = self.receive();
+        if line.is_err() {
+            return line;
         }
-        let result2 = conn.flush();
-        if result2.is_err() {
-            return Err(result2.err().unwrap());
+        let content = line.unwrap();
+        if !content.starts_with(&expects) {
+            return Err(Error::new(ErrorKind::NotFound, content));
         }
+        return Ok(content);
+    }
+    pub fn rename(&self, from: String, to: String) -> Result<String, Error> {
+        let rename_from_command = format!("RNFR {}", from);
+        let result1 = self.cmd(super::status::STATUS_ACTION_PENDING.to_string(), rename_from_command);
+        if result1.is_err() {
+            return Err(result1.err().unwrap())
+        }
+        let rename_to_command = format!("RNTO {}",to);
+        let result2 = self.cmd(super::status::STATUS_ACTION_PENDING.to_string(), rename_to_command);
+        return result2
+    }
+    pub fn mkd(&self, path: String) -> Result<String, Error> {
+        let commond = format!("MKD {}", path);
+        let result = self.cmd(super::status::STATUS_PATH_CREATED.to_string(), commond);
         return result;
     }
+    pub fn rmd(&self, path: String) -> Result<String, Error> {
+        let commond = format!("RMD {}", path);
+        let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
+        return result;
+    }
+    pub fn pwd(&self) -> Result<String,Error> {
+        let result = self.cmd(super::status::STATUS_PATH_CREATED.to_string(), "PWD".to_string());
+        if result.borrow().as_ref().is_err() {
+            return Err(result.err().unwrap())
+        }
+        let path_regex = Regex::new("\"(.*)\"").unwrap();
+        let content = result.borrow().as_ref().unwrap();
+        let path = path_regex.captures_iter(&content.as_str()).enumerate();
+        let mut r = String::new();
+        for (_,v) in path {
+            for i in 0..v.len() {
+                r = String::from(&v[i]);
+            }
+        }
+        return Ok(r)
+    }
+    pub fn cwd(&self, path:String) -> Result<String, Error> {
+        let commond = format!("CWD {}", path);
+        let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
+        return result;
+    }
+    pub fn delete(&self, path:String) -> Result<String, Error> {
+        let commond = format!("DELE {}", path);
+        let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
+        if result.is_err() {
+            return Err(result.err().unwrap())
+        }
+        let line = self.receive();
+        if line.is_err() {
+            return Err(result.err().unwrap())
+        }
+        let content = line.unwrap();
+        if !content.starts_with("200") {
+            return Err(Error::new(ErrorKind::NotFound, content));
+        }
+        return Ok(content);
+    }
+    pub fn auth_tls(&self) {} // no finished
+    pub fn read_and_discard(&self) {} // no finished
+    pub fn type_of(&self) {} // no finished
     fn receive_line(&self) -> Result<String, Error> {
         let mut reader = BufReader::new(&self.conn);
         let mut the_result = String::new();
@@ -78,24 +145,30 @@ impl FTP {
         }
         return Ok(readed_line);
     }
-    fn cmd(&self, expects: String, command: String) -> Result<String, Error> {
-        let send_result = self.send(command);
-        if send_result.is_err() {
-            return Err(send_result.err().unwrap());
+    fn receive_no_discard(&self) {} // no finished
+    fn send(&self, command: String) -> Result<usize, Error> {
+        let mut conn = &self.conn;
+        let mut new_command = command;
+        if !new_command.ends_with("\r\n") {
+            new_command.push_str("\r\n");
         }
-        let line = self.receive();
-        if line.is_err() {
-            return line;
+        let result = conn.write(new_command.as_bytes());
+        if result.is_err() {
+            return result;
         }
-        let content = line.unwrap();
-        if !content.starts_with(&expects) {
-            return Err(Error::new(ErrorKind::NotFound, content));
+        let result2 = conn.flush();
+        if result2.is_err() {
+            return Err(result2.err().unwrap());
         }
-        return Ok(content);
+        return result;
     }
-    pub fn close(&self) {
-        &self.conn.shutdown(net::Shutdown::Both);
-    }
+    pub fn pasv(&self) {} // no finished
+    fn new_connection(&self) {} // no finished
+    pub fn stor(&self) {} // no finished
+    pub fn syst(&self) {} // no finished
+    pub fn stat(&self) {} // no finished
+    pub fn retr(&self) {} // no finished
+    pub fn list(&self) {} // no finished
     pub fn login(&self, username: String, password: String) -> Result<String, Error> {
         let command_for_username = format!("USER {}", username);
         let result_for_username = self.cmd("331".to_string(), command_for_username);
@@ -112,47 +185,6 @@ impl FTP {
         }
         return Ok(String::new());
     }
-    pub fn mkd(&self, path: String) -> Result<String, Error> {
-        let commond = format!("MKD {}", path);
-        let result = self.cmd(super::status::STATUS_PATH_CREATED.to_string(), commond);
-        return result;
-    }
-    pub fn rmd(&self, path: String) -> Result<String, Error> {
-        let commond = format!("RMD {}", path);
-        let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
-        return result;
-    }
-    pub fn rename(&self, from: String, to: String) -> Result<String, Error> {
-        let rename_from_command = format!("RNFR {}", from);
-        let result1 = self.cmd(super::status::STATUS_ACTION_PENDING.to_string(), rename_from_command);
-        if result1.is_err() {
-            return Err(result1.err().unwrap())
-        }
-        let rename_to_command = format!("RNTO {}",to);
-        let result2 = self.cmd(super::status::STATUS_ACTION_PENDING.to_string(), rename_to_command);
-        return result2
-    }
-    pub fn pwd(&self) -> Result<String,Error> {
-        let result = self.cmd(super::status::STATUS_PATH_CREATED.to_string(), "PWD".to_string());
-        if result.borrow().as_ref().is_err() {
-            return Err(result.err().unwrap())
-        }
-        let path_regex = Regex::new("\"(.*)\"").unwrap();
-        let content = result.borrow().as_ref().unwrap();
-        let path = path_regex.captures_iter(&content.as_str()).enumerate();
-        let mut r = String::new();
-        for (_,v) in path {
-            for i in 0..v.len() {
-                r = String::from(&v[i]);
-            }
-        }
-        return Ok(r)
-    }
-    pub fn cwd(&self, path:String) -> Result<String, Error> {
-        let commond = format!("CWD {}", path);
-        let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
-        return result;
-    }
     pub fn size(&self, path:String) -> Result<u32, Error> {
         let commond = format!("SIZE {}", path);
         let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
@@ -164,21 +196,5 @@ impl FTP {
             let size = size_str.parse::<u32>();
             return Ok(size.ok().unwrap())
         }
-    }
-    pub fn dele(&self, path:String) -> Result<String, Error> {
-        let commond = format!("DELE {}", path);
-        let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
-        if result.is_err() {
-            return Err(result.err().unwrap())
-        }
-        let line = self.receive();
-        if line.is_err() {
-            return Err(result.err().unwrap())
-        }
-        let content = line.unwrap();
-        if !content.starts_with("200") {
-            return Err(Error::new(ErrorKind::NotFound, content));
-        }
-        return Ok(content);
     }
 }
