@@ -1,6 +1,6 @@
 use super::status;
 use regex::Regex;
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::net;
 use std::result::Result;
@@ -65,7 +65,7 @@ impl FTP {
         }
         let content = line.unwrap();
         if !content.starts_with(&expects) {
-            return Err(Error::new(ErrorKind::NotFound, content));
+            return Err(Error::new(ErrorKind::Other, content));
         }
         return Ok(content);
     }
@@ -204,16 +204,45 @@ impl FTP {
         } else {
             let line = line_res.unwrap();
             if !line.starts_with(status::STATUS_SYSTEM_TYPE) {
-                return Err(Error::new(ErrorKind::NotFound, line))
+                return Err(Error::new(ErrorKind::Other, line))
             }
             let the_list = line.splitn(2, " ");
             return Ok(the_list[1])
         }
     }
-    pub fn stat(&self, path: String) {
+    pub fn stat(&self, path: String) -> Result<Vec<String>, Error> {
         let commond = format!("STAT {}", path);
         let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
-    } // no finished
+        if result.is_err() {
+            return Err(result.err().unwrap())
+        }
+        let stat_res = self.receive();
+        if stat_res.is_err() {
+            return Err(stat_res.err().unwrap())
+        } else {
+            let stat = stat_res.unwrap();
+            if !stat.starts_with(status::STATUS_FILE_STATUS) &&
+                !stat.starts_with(status::STATUS_DIRECTORY_STATUS) &&
+                !stat.starts_with(status::STATUS_SYSTEM_STATUS) {
+                return Err(Error::new(ErrorKind::Other, stat))
+            }
+            let mut result:Vec<String> = vec![];
+            let res = stat.split("\n");
+            if stat.starts_with(status::STATUS_SYSTEM_STATUS) {
+                for obj in res {
+                    result.append(String::from(obj).borrow_mut())
+                }
+                return Ok(result)
+            }
+            for obj in res {
+                if obj.starts_with(status::STATUS_FILE_STATUS) {
+                    continue
+                }
+                result.append(String::from(obj.trim()).borrow_mut())
+            }
+            return Ok(result)
+        }
+    }
     pub fn retr(&self) {} // no finished
     pub fn list(&self, path:String) -> Result<String, Error> {
         let before_res = self.type_of(String::from(status::TYPE_ASCII));
