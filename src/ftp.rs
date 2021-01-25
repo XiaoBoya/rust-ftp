@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::net;
 use std::result::Result;
 use std::str;
+use std::ops::Add;
 
 pub struct FTP {
     pub conn: net::TcpStream,
@@ -133,7 +134,32 @@ impl FTP {
         return Ok(content);
     }
     pub fn auth_tls(&self) {} // no finished
-    pub fn read_and_discard(&self) {} // no finished
+    pub fn read_and_discard(&self) -> Result<String,Error> {
+        let line_res = self.receive_line();
+        if line_res.is_err() {
+            return Err(line_res.err().unwrap())
+        }
+        let mut line = line_res.unwrap();
+        if line.len() >= 4 && line[3] == "-" {
+            let closing_code = &line[0..3] + " ";
+            loop {
+                let str_res = self.receive_line();
+                if str_res.is_err(){
+                    return Err(str_res.err().unwrap())
+                }
+                let str = str_res.unwrap();
+                line = line.add(str.as_str());
+                if str.len() < 4 {
+                    break
+                } else {
+                    if str[..4] == closing_code {
+                        break
+                    }
+                }
+            }
+        }
+        return Ok(String::from(line))
+    }
     pub fn type_of(&self, t: String) -> Result<String, Error> {
         let commond = format!("TYPE {}", t);
         let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
