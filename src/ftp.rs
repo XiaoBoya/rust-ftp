@@ -227,14 +227,13 @@ impl FTP {
         let line_res = self.receive();
         if line_res.is_err() {
             return Err(line_res.err().unwrap())
-        } else {
-            let line = line_res.unwrap();
-            if !line.starts_with(status::STATUS_SYSTEM_TYPE) {
-                return Err(Error::new(ErrorKind::Other, line))
-            }
-            let the_list = line.splitn(2, " ");
-            return Ok(the_list[1])
         }
+        let line = line_res.unwrap();
+        if !line.starts_with(status::STATUS_SYSTEM_TYPE) {
+            return Err(Error::new(ErrorKind::Other, line))
+        }
+        let the_list = line.splitn(2, " ");
+        return Ok(the_list[1])
     }
     pub fn stat(&self, path: String) -> Result<Vec<String>, Error> {
         let commond = format!("STAT {}", path);
@@ -245,29 +244,28 @@ impl FTP {
         let stat_res = self.receive();
         if stat_res.is_err() {
             return Err(stat_res.err().unwrap())
-        } else {
-            let stat = stat_res.unwrap();
-            if !stat.starts_with(status::STATUS_FILE_STATUS) &&
-                !stat.starts_with(status::STATUS_DIRECTORY_STATUS) &&
-                !stat.starts_with(status::STATUS_SYSTEM_STATUS) {
-                return Err(Error::new(ErrorKind::Other, stat))
-            }
-            let mut result:Vec<String> = vec![];
-            let res = stat.split("\n");
-            if stat.starts_with(status::STATUS_SYSTEM_STATUS) {
-                for obj in res {
-                    result.append(String::from(obj).borrow_mut())
-                }
-                return Ok(result)
-            }
+        }
+        let stat = stat_res.unwrap();
+        if !stat.starts_with(status::STATUS_FILE_STATUS) &&
+            !stat.starts_with(status::STATUS_DIRECTORY_STATUS) &&
+            !stat.starts_with(status::STATUS_SYSTEM_STATUS) {
+            return Err(Error::new(ErrorKind::Other, stat))
+        }
+        let mut result:Vec<String> = vec![];
+        let res = stat.split("\n");
+        if stat.starts_with(status::STATUS_SYSTEM_STATUS) {
             for obj in res {
-                if obj.starts_with(status::STATUS_FILE_STATUS) {
-                    continue
-                }
-                result.append(String::from(obj.trim()).borrow_mut())
+                result.append(String::from(obj).borrow_mut())
             }
             return Ok(result)
         }
+        for obj in res {
+            if obj.starts_with(status::STATUS_FILE_STATUS) {
+                continue
+            }
+            result.append(String::from(obj.trim()).borrow_mut())
+        }
+        return Ok(result)
     }
     pub fn retr(&self) {} // no finished
     pub fn list(&self, path:String) -> Result<String, Error> {
@@ -298,11 +296,10 @@ impl FTP {
         let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
         if result.is_err() {
             return Err(result.err().unwrap());
-        } else {
-            let mut size_mid_str = result.as_ref().unwrap();
-            let size_str = &size_mid_str[4..size_mid_str.len() - 2];
-            let size = size_str.parse::<u32>();
-            return Ok(size.ok().unwrap());
         }
+        let mut size_mid_str = result.as_ref().unwrap();
+        let size_str = &size_mid_str[4..size_mid_str.len() - 2];
+        let size = size_str.parse::<u32>();
+        return Ok(size.ok().unwrap());
     }
 }
