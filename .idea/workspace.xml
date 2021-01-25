@@ -5,7 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="488a315d-13c2-45ec-8825-44a49cb55462" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ftp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ftp.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/status.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/status.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -33,12 +35,12 @@
               <option name="branches">
                 <list>
                   <RecentBranch>
-                    <option name="branchName" value="master" />
-                    <option name="lastUsedInstant" value="1605756082" />
+                    <option name="branchName" value="dev" />
+                    <option name="lastUsedInstant" value="1605761159" />
                   </RecentBranch>
                   <RecentBranch>
-                    <option name="branchName" value="dev" />
-                    <option name="lastUsedInstant" value="1605756081" />
+                    <option name="branchName" value="master" />
+                    <option name="lastUsedInstant" value="1605756082" />
                   </RecentBranch>
                 </list>
               </option>
@@ -48,6 +50,10 @@
         </option>
       </RecentBranches>
     </option>
+  </component>
+  <component name="KubernetesApiPersistence">
+    <option name="context" value="docker-desktop" />
+    <option name="namespace" value="default" />
   </component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="5q04ndb4" />

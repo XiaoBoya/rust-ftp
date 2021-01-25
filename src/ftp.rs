@@ -1,10 +1,10 @@
+use super::status;
+use regex::Regex;
+use std::borrow::Borrow;
 use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::net;
 use std::result::Result;
 use std::str;
-use regex::Regex;
-use std::borrow::Borrow;
-use super::status;
 
 pub struct FTP {
     pub conn: net::TcpStream,
@@ -31,8 +31,26 @@ impl FTP {
     pub fn close(&self) {
         &self.conn.shutdown(net::Shutdown::Both);
     }
-    fn parse_line(&self) {} // no finished
-    pub fn walk(&self) {} // no finished
+    fn parse_line(&self, line: String) -> (String,String,String) {
+        let result_for_list = line.split(";");
+        let mut perm = String::from("");
+        let mut t = String::from("");
+        let mut filename = String::from("");
+        for v in result_for_list {
+            let v2 = String::from(v).split("=");
+            if v2[0] == "perm" {
+                perm = String::from(v2[1]);
+            } else if v2[0] == "type" {
+                t = String::from(v2[1]);
+            } else {
+                filename = String::from(v2[1]);
+            }
+        }
+        return (perm, t, filename)
+    } // no finished
+    pub fn walk(&self) {
+        let mut line:Vec<String> = vec![];
+    } // no finished
     pub fn quit(&self) {} // no finished
     pub fn noop(&self) {} // no finished
     pub fn raw_cmd(&self) {} // no finished
@@ -53,13 +71,19 @@ impl FTP {
     }
     pub fn rename(&self, from: String, to: String) -> Result<String, Error> {
         let rename_from_command = format!("RNFR {}", from);
-        let result1 = self.cmd(super::status::STATUS_ACTION_PENDING.to_string(), rename_from_command);
+        let result1 = self.cmd(
+            super::status::STATUS_ACTION_PENDING.to_string(),
+            rename_from_command,
+        );
         if result1.is_err() {
-            return Err(result1.err().unwrap())
+            return Err(result1.err().unwrap());
         }
-        let rename_to_command = format!("RNTO {}",to);
-        let result2 = self.cmd(super::status::STATUS_ACTION_PENDING.to_string(), rename_to_command);
-        return result2
+        let rename_to_command = format!("RNTO {}", to);
+        let result2 = self.cmd(
+            super::status::STATUS_ACTION_PENDING.to_string(),
+            rename_to_command,
+        );
+        return result2;
     }
     pub fn mkd(&self, path: String) -> Result<String, Error> {
         let commond = format!("MKD {}", path);
@@ -71,46 +95,50 @@ impl FTP {
         let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
         return result;
     }
-    pub fn pwd(&self) -> Result<String,Error> {
-        let result = self.cmd(super::status::STATUS_PATH_CREATED.to_string(), "PWD".to_string());
+    pub fn pwd(&self) -> Result<String, Error> {
+        let result = self.cmd(
+            super::status::STATUS_PATH_CREATED.to_string(),
+            "PWD".to_string(),
+        );
         if result.borrow().as_ref().is_err() {
-            return Err(result.err().unwrap())
+            return Err(result.err().unwrap());
         }
         let path_regex = Regex::new("\"(.*)\"").unwrap();
         let content = result.borrow().as_ref().unwrap();
         let path = path_regex.captures_iter(&content.as_str()).enumerate();
         let mut r = String::new();
-        for (_,v) in path {
+        for (_, v) in path {
             for i in 0..v.len() {
                 r = String::from(&v[i]);
             }
         }
-        return Ok(r)
+        return Ok(r);
     }
-    pub fn cwd(&self, path:String) -> Result<String, Error> {
+    pub fn cwd(&self, path: String) -> Result<String, Error> {
         let commond = format!("CWD {}", path);
         let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
         return result;
     }
-    pub fn delete(&self, path:String) -> Result<String, Error> {
+    pub fn delete(&self, path: String) -> Result<String, Error> {
         let commond = format!("DELE {}", path);
-        let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
+        let result = self.cmd(super::status::STATUS_OK.to_string(), commond);
         if result.is_err() {
-            return Err(result.err().unwrap())
+            return Err(result.err().unwrap());
         }
         let line = self.receive();
         if line.is_err() {
-            return Err(result.err().unwrap())
+            return Err(result.err().unwrap());
         }
         let content = line.unwrap();
-        if !content.starts_with("200") {
-            return Err(Error::new(ErrorKind::NotFound, content));
-        }
         return Ok(content);
     }
     pub fn auth_tls(&self) {} // no finished
     pub fn read_and_discard(&self) {} // no finished
-    pub fn type_of(&self) {} // no finished
+    pub fn type_of(&self, t: String) -> Result<String, Error> {
+        let commond = format!("TYPE {}", t);
+        let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
+        return result
+    }
     fn receive_line(&self) -> Result<String, Error> {
         let mut reader = BufReader::new(&self.conn);
         let mut the_result = String::new();
@@ -165,10 +193,35 @@ impl FTP {
     pub fn pasv(&self) {} // no finished
     fn new_connection(&self) {} // no finished
     pub fn stor(&self) {} // no finished
-    pub fn syst(&self) {} // no finished
-    pub fn stat(&self) {} // no finished
+    pub fn syst(&self) -> Result<String, Error> {
+        let res = self.send(String::from("SYST"));
+        if res.is_err() {
+            return Err(res.err().unwrap())
+        }
+        let line_res = self.receive();
+        if line_res.is_err() {
+            return Err(line_res.err().unwrap())
+        } else {
+            let line = line_res.unwrap();
+            if !line.starts_with(status::STATUS_SYSTEM_TYPE) {
+                return Err(Error::new(ErrorKind::NotFound, line))
+            }
+            let the_list = line.splitn(2, " ");
+            return Ok(the_list[1])
+        }
+    }
+    pub fn stat(&self, path: String) {
+        let commond = format!("STAT {}", path);
+        let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
+    } // no finished
     pub fn retr(&self) {} // no finished
-    pub fn list(&self) {} // no finished
+    pub fn list(&self, path:String) -> Result<String, Error> {
+        let before_res = self.type_of(String::from(status::TYPE_ASCII));
+        if before_res.is_err() {
+            return Err(before_res.err().unwrap())
+        }
+        return Ok(String::from(""))
+    } // no finished
     pub fn login(&self, username: String, password: String) -> Result<String, Error> {
         let command_for_username = format!("USER {}", username);
         let result_for_username = self.cmd("331".to_string(), command_for_username);
@@ -185,16 +238,16 @@ impl FTP {
         }
         return Ok(String::new());
     }
-    pub fn size(&self, path:String) -> Result<u32, Error> {
+    pub fn size(&self, path: String) -> Result<u32, Error> {
         let commond = format!("SIZE {}", path);
         let result = self.cmd(super::status::STATUS_FILE_STATUS.to_string(), commond);
         if result.is_err() {
-            return Err(result.err().unwrap())
+            return Err(result.err().unwrap());
         } else {
             let mut size_mid_str = result.as_ref().unwrap();
-            let size_str = &size_mid_str[4..size_mid_str.len()-2];
+            let size_str = &size_mid_str[4..size_mid_str.len() - 2];
             let size = size_str.parse::<u32>();
-            return Ok(size.ok().unwrap())
+            return Ok(size.ok().unwrap());
         }
     }
 }

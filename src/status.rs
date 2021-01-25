@@ -9,3 +9,9 @@ pub const STATUS_CLOSING_DATA_CONNECTION: &'static str = "226";
 pub const STATUS_ACTION_OK: &'static str = "250";
 pub const STATUS_PATH_CREATED: &'static str = "257";
 pub const STATUS_ACTION_PENDING: &'static str = "350";
+
+
+pub const TYPE_ASCII: &'static str = "A"; // TypeASCII for ASCII
+pub const TYPE_EBCDIC: &'static str = "E"; // TypeEBCDIC for EBCDIC
+pub const TYPE_IMAGE: &'static str = "I"; // TypeEBCDIC for an Image
+pub const TYPE_LOCAL: &'static str = "L"; // TypeLocal for local byte size
