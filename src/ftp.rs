@@ -52,9 +52,22 @@ impl FTP {
     pub fn walk(&self) {
         let mut line:Vec<String> = vec![];
     } // no finished
-    pub fn quit(&self) {} // no finished
-    pub fn noop(&self) {} // no finished
-    pub fn raw_cmd(&self) {} // no finished
+    pub fn quit(&self) -> Option<Error> {
+        let cmd_res = self.cmd(status::STATUS_CONNECTION_CLOSING.to_string(), "QUIT".to_string());
+        if cmd_res.is_err() {
+            return Some(cmd_res.err().unwrap());
+        }
+        &self.conn.shutdown(net::Shutdown::Both);
+        return None
+    }
+    pub fn noop(&self) -> Result<String, Error> {
+        let result = self.cmd(super::status::STATUS_OK.to_string(), "NOOP".to_string());
+        return result
+    }
+    pub fn raw_cmd(&self, commond:String) -> (i32, String) {
+        let mut code = -1;
+
+    } // no finished
     fn cmd(&self, expects: String, command: String) -> Result<String, Error> {
         let send_result = self.send(command);
         if send_result.is_err() {
@@ -135,31 +148,7 @@ impl FTP {
     }
     pub fn auth_tls(&self) {} // no finished
     pub fn read_and_discard(&self) -> Result<String,Error> {
-        let line_res = self.receive_line();
-        if line_res.is_err() {
-            return Err(line_res.err().unwrap())
-        }
-        let mut line = line_res.unwrap();
-        if line.len() >= 4 && line[3] == "-" {
-            let closing_code = &line[0..3] + " ";
-            loop {
-                let str_res = self.receive_line();
-                if str_res.is_err(){
-                    return Err(str_res.err().unwrap())
-                }
-                let str = str_res.unwrap();
-                line = line.add(str.as_str());
-                if str.len() < 4 {
-                    break
-                } else {
-                    if str[..4] == closing_code {
-                        break
-                    }
-                }
-            }
-        }
-        return Ok(String::from(line))
-    }
+    } // no finished
     pub fn type_of(&self, t: String) -> Result<String, Error> {
         let commond = format!("TYPE {}", t);
         let result = self.cmd(super::status::STATUS_ACTION_OK.to_string(), commond);
@@ -199,7 +188,32 @@ impl FTP {
         }
         return Ok(readed_line);
     }
-    fn receive_no_discard(&self) {} // no finished
+    fn receive_no_discard(&self) -> Result<String,Error> {
+        let line_res = self.receive_line();
+        if line_res.is_err() {
+            return Err(line_res.err().unwrap())
+        }
+        let mut line = line_res.unwrap();
+        if line.len() >= 4 && line[3] == "-" {
+            let closing_code = &line[0..3] + " ";
+            loop {
+                let str_res = self.receive_line();
+                if str_res.is_err(){
+                    return Err(str_res.err().unwrap())
+                }
+                let str = str_res.unwrap();
+                line = line.add(str.as_str());
+                if str.len() < 4 {
+                    break
+                } else {
+                    if str[..4] == closing_code {
+                        break
+                    }
+                }
+            }
+        }
+        return Ok(String::from(line))
+    }
     fn send(&self, command: String) -> Result<usize, Error> {
         let mut conn = &self.conn;
         let mut new_command = command;
