@@ -6,6 +6,12 @@ use std::net;
 use std::result::Result;
 use std::str;
 use std::ops::Add;
+use std::net::TcpStream;
+use std::sync::atomic::AtomicU32;
+use std::thread;
+use std::time::Duration;
+use crossbeam::channel::bounded;
+use std::ptr::null;
 
 pub struct FTP {
     pub conn: net::TcpStream,
@@ -26,9 +32,6 @@ pub fn connect(addr: &str) -> Result<FTP, Error> {
 }
 
 impl FTP {
-    // pub fn read_discard(&mut self) {
-    //     self.conn.flush();
-    // }
     pub fn close(&self) {
         &self.conn.shutdown(net::Shutdown::Both);
     }
@@ -48,7 +51,7 @@ impl FTP {
             }
         }
         return (perm, t, filename)
-    } // no finished
+    }
     pub fn walk(&self) {
         let mut line:Vec<String> = vec![];
     } // no finished
@@ -230,8 +233,62 @@ impl FTP {
         }
         return result;
     }
-    pub fn pasv(&self) {} // no finished
-    fn new_connection(&self) {} // no finished
+    pub fn pasv(&self) -> Result<i32, Error> {
+        let (s, r) = bounded(0);
+        let mut result = 0;
+        thread::spawn(move || {
+            let line_res = self.cmd(String::from("227"), String::from("PASV"));
+            if line_res.is_err() {
+                s.send(line_res.err());
+                return
+            }
+            let r = Regex::new(r"\((.*)\)")?;
+            if r.is_match(line_res.unwrap().as_str()) {
+                let match_list = r.captures_iter(&line_res.unwrap());
+                if match_list.count() == 0 {
+                    s.send(Some(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+                    return
+                }
+                let res = match_list.borrow().next().unwrap();
+                if res.len() < 2 {
+                    s.send(Some(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+                    return
+                }
+                let port_list = &res[1].split(",");
+                if port_list.count() < 2 {
+                    s.send(Some(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+                    return
+                }
+                let p1 = String::from(port_list[0]).parse::<i32>().unwrap();
+                let p2 = String::from(port_list[1]).parse::<i32>().unwrap();
+                result = p1 << 8 + p2;
+            } else {
+                s.send(Some(Error::new(ErrorKind::Other, "time out")));
+                return
+            }
+            s.send(None);
+        });
+        if let Ok(msg) = r.recv_timeout(Duration::from_secs(10)) {
+            if msg.is_some() {
+                return Err(msg.unwrap())
+            }
+            return Ok(result)
+        }else {
+            self.close();
+            return Err(Error::new(ErrorKind::Other, "time out"))
+        };
+    }
+    fn new_connection(&self, port: u32) -> Result<TcpStream, Error> {
+        let port_str = port.to_string();
+        let host = self.addr.split(":")[0];
+        let new_addr = host + ":" + port_str;
+        let conn = net::TcpStream::connect(new_addr);
+        if conn.is_err() {
+            return Err(conn.err().unwrap())
+        }
+        // TODO tls
+        return Ok(conn.unwrap())
+    }
     pub fn stor(&self) {} // no finished
     pub fn syst(&self) -> Result<String, Error> {
         let res = self.send(String::from("SYST"));
@@ -281,7 +338,9 @@ impl FTP {
         }
         return Ok(result)
     }
-    pub fn retr(&self) {} // no finished
+    pub fn retr(&self, path: String) {
+        let type_res = self.type_of(String::from(status::TYPE_IMAGE));
+    } // no finished
     pub fn list(&self, path:String) -> Result<String, Error> {
         let before_res = self.type_of(String::from(status::TYPE_ASCII));
         if before_res.is_err() {

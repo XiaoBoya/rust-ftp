@@ -5,6 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="488a315d-13c2-45ec-8825-44a49cb55462" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ftp.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ftp.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
