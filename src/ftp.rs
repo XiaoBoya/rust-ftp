@@ -7,12 +7,12 @@ use std::result::Result;
 use std::str;
 use std::ops::Add;
 use std::net::TcpStream;
-use std::sync::atomic::AtomicU32;
 use std::thread;
 use std::time::Duration;
 use crossbeam::channel::bounded;
-use std::ptr::null;
+use crossbeam::channel::Sender;
 
+#[derive(Debug)]
 pub struct FTP {
     pub conn: net::TcpStream,
     pub addr: String,
@@ -41,7 +41,8 @@ impl FTP {
         let mut t = String::from("");
         let mut filename = String::from("");
         for v in result_for_list {
-            let v2 = String::from(v).split("=");
+            let v_str = String::from(v);
+            let v2 = v_str.split("=").collect::<Vec<&str>>();
             if v2[0] == "perm" {
                 perm = String::from(v2[1]);
             } else if v2[0] == "type" {
@@ -69,7 +70,7 @@ impl FTP {
     }
     pub fn raw_cmd(&self, commond:String) -> (i32, String) {
         let mut code = -1;
-
+        return (0, "".to_string())
     } // no finished
     fn cmd(&self, expects: String, command: String) -> Result<String, Error> {
         let send_result = self.send(command);
@@ -151,6 +152,7 @@ impl FTP {
     }
     pub fn auth_tls(&self) {} // no finished
     pub fn read_and_discard(&self) -> Result<String,Error> {
+        return Ok("".to_string())
     } // no finished
     pub fn type_of(&self, t: String) -> Result<String, Error> {
         let commond = format!("TYPE {}", t);
@@ -197,8 +199,8 @@ impl FTP {
             return Err(line_res.err().unwrap())
         }
         let mut line = line_res.unwrap();
-        if line.len() >= 4 && line[3] == "-" {
-            let closing_code = &line[0..3] + " ";
+        if line.len() >= 4 && &line[3..4] == "-" {
+            let closing_code = format!("{}{}", line[0..3].to_string(), " ".to_string());
             loop {
                 let str_res = self.receive_line();
                 if str_res.is_err(){
@@ -233,55 +235,71 @@ impl FTP {
         }
         return result;
     }
-    pub fn pasv(&self) -> Result<i32, Error> {
+    fn pasv_(&self, s: Sender<Result<i32,Error>>) {
+        let line_res = self.cmd(String::from("227"), String::from("PASV"));
+        if line_res.is_err() {
+            s.send(Err(Error::new(ErrorKind::Other,line_res.err().unwrap().to_string())));
+            return;
+        }
+        let rex = Regex::new(r"\((.*)\)");
+        if rex.is_err() {
+            s.send(Err(Error::new(ErrorKind::Other, rex.err().unwrap())));
+            return
+        }
+        let rex = rex.unwrap();
+        let line_res2 = line_res.unwrap().clone();
+        if rex.is_match(line_res2.as_str()) {
+            let match_list = rex.captures_iter(&line_res2);
+            let mut n = 0;
+            for (i,v) in match_list.enumerate() {
+                n += 1;
+                if i == 0 {
+                    if v.len() < 2 {
+                        s.send(Err(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+                        return
+                    }
+                    let port_list = &v[1].split(",").collect::<Vec<&str>>();
+                    if port_list.len() < 2 {
+                        s.send(Err(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+                        return
+                    }
+                    let port_list = &v[1].split(",").collect::<Vec<&str>>();
+                    if port_list.len() < 2 {
+                        s.send(Err(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+                        return
+                    }
+                    let p1 = String::from(port_list[0]).parse::<i32>().unwrap();
+                    let p2 = String::from(port_list[1]).parse::<i32>().unwrap();
+                    let res = p1 << 8 + p2;
+                    s.send(Ok(res));
+                    return;
+                }
+            }
+            if n == 0 {
+                s.send(Err(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+                return
+            }
+        } else {
+            s.send(Err(Error::new(ErrorKind::Other, "PasvBadAnswer")));
+            return
+        }
+    }
+    pub fn pasv(self) -> Result<i32, Error> {
         let (s, r) = bounded(0);
         let mut result = 0;
-        thread::spawn(move || {
-            let line_res = self.cmd(String::from("227"), String::from("PASV"));
-            if line_res.is_err() {
-                s.send(line_res.err());
-                return
-            }
-            let r = Regex::new(r"\((.*)\)")?;
-            if r.is_match(line_res.unwrap().as_str()) {
-                let match_list = r.captures_iter(&line_res.unwrap());
-                if match_list.count() == 0 {
-                    s.send(Some(Error::new(ErrorKind::Other, "PasvBadAnswer")));
-                    return
-                }
-                let res = match_list.borrow().next().unwrap();
-                if res.len() < 2 {
-                    s.send(Some(Error::new(ErrorKind::Other, "PasvBadAnswer")));
-                    return
-                }
-                let port_list = &res[1].split(",");
-                if port_list.count() < 2 {
-                    s.send(Some(Error::new(ErrorKind::Other, "PasvBadAnswer")));
-                    return
-                }
-                let p1 = String::from(port_list[0]).parse::<i32>().unwrap();
-                let p2 = String::from(port_list[1]).parse::<i32>().unwrap();
-                result = p1 << 8 + p2;
-            } else {
-                s.send(Some(Error::new(ErrorKind::Other, "time out")));
-                return
-            }
-            s.send(None);
-        });
+        let obj = self;
+        thread::spawn(move || {obj.pasv_(s)});
         if let Ok(msg) = r.recv_timeout(Duration::from_secs(10)) {
-            if msg.is_some() {
-                return Err(msg.unwrap())
-            }
-            return Ok(result)
+            return msg
         }else {
-            self.close();
             return Err(Error::new(ErrorKind::Other, "time out"))
         };
     }
     fn new_connection(&self, port: u32) -> Result<TcpStream, Error> {
         let port_str = port.to_string();
-        let host = self.addr.split(":")[0];
-        let new_addr = host + ":" + port_str;
+        let host_list = self.addr.split(":").collect::<Vec<&str>>();
+        let host = host_list[0];
+        let new_addr = host.to_owned() + ":" + &port_str;
         let conn = net::TcpStream::connect(new_addr);
         if conn.is_err() {
             return Err(conn.err().unwrap())
@@ -303,8 +321,8 @@ impl FTP {
         if !line.starts_with(status::STATUS_SYSTEM_TYPE) {
             return Err(Error::new(ErrorKind::Other, line))
         }
-        let the_list = line.splitn(2, " ");
-        return Ok(the_list[1])
+        let the_list = line.splitn(2, " ").collect::<Vec<&str>>();
+        return Ok(String::from(the_list[1]))
     }
     pub fn stat(&self, path: String) -> Result<Vec<String>, Error> {
         let commond = format!("STAT {}", path);
@@ -326,7 +344,7 @@ impl FTP {
         let res = stat.split("\n");
         if stat.starts_with(status::STATUS_SYSTEM_STATUS) {
             for obj in res {
-                result.append(String::from(obj).borrow_mut())
+                result.push(String::from(obj))
             }
             return Ok(result)
         }
@@ -334,7 +352,7 @@ impl FTP {
             if obj.starts_with(status::STATUS_FILE_STATUS) {
                 continue
             }
-            result.append(String::from(obj.trim()).borrow_mut())
+            result.push(String::from(obj.trim()))
         }
         return Ok(result)
     }
